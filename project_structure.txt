@@ -1,0 +1,8 @@
+MBTI/
+├── app.py               # Flask 애플리케이션 코드
+├── mbti_data.json       # MBTI 데이터를 저장한 JSON 파일
+├── project_structure.txt # 프로젝트 구조 설명 파일
+├── templates/           # HTML 템플릿 폴더
+│   └── index.html       # UI를 위한 HTML 파일
+└── static/              # CSS, JavaScript 등의 정적 파일 폴더
+    └── styles.css       # 스타일 정의 파일
