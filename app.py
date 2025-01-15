@@ -3,6 +3,9 @@ import openai  # OpenAI API 호출을 위한 모듈
 import json  # JSON 데이터 처리 모듈
 import os  # OS 관련 기능 (환경 변수 처리)
 from dotenv import load_dotenv  # .env 파일에서 환경 변수 로드
+from langchain.prompts import PromptTemplate  # LangChain의 프롬프트 템플릿 모듈
+from langchain.chains import LLMChain  # LangChain의 체인 모듈
+from langchain.chat_models import ChatOpenAI  # OpenAI를 사용하는 LangChain 챗 모델
 
 # .env 파일 로드
 load_dotenv("OpenAI_key.env")  # OpenAI API 키가 포함된 .env 파일 로드
@@ -18,6 +21,23 @@ with open('mbti_data.json', 'r', encoding='utf-8') as file:
 # 사용자 MBTI와 대화 기록을 저장할 전역 변수
 user_mbti = None  # 현재 사용자의 MBTI
 conversation_history = []  # 대화 기록 저장 리스트
+
+# LangChain을 사용한 LLM 설정
+llm = ChatOpenAI(model="gpt-3.5-turbo", temperature=0.7)  # OpenAI 모델 설정
+
+# 프롬프트 템플릿 설정
+prompt_template = PromptTemplate(
+    input_variables=["mbti", "user_input", "retrieved_data"],
+    template=(
+        "당신은 {mbti} 성격 유형을 가진 AI입니다.\n"
+        "사용자가 입력한 메시지: '{user_input}'\n"
+        "관련 데이터: '{retrieved_data}'\n"
+        "위 정보를 바탕으로 친절하고 자세한 답변을 생성하세요."
+    )
+)
+
+# LangChain 체인 생성
+chat_chain = LLMChain(llm=llm, prompt=prompt_template)
 
 # JSON 데이터 검색 함수
 def search_mbti_data(mbti, user_input):
@@ -42,7 +62,7 @@ def set_mbti():
     conversation_history = []  # 대화 기록 초기화
     return jsonify({"reply": f"MBTI가 {user_mbti}로 설정되었습니다."})  # 설정 결과 응답
 
-# 채팅 API (RAG 방식)
+# 채팅 API
 @app.route('/chat', methods=['POST'])
 def chat():
     global user_mbti, conversation_history  # 전역 변수 접근
@@ -60,20 +80,15 @@ def chat():
     # JSON 데이터에서 검색
     retrieved_data = search_mbti_data(user_mbti, user_message)
 
-    # OpenAI API 호출
+    # LangChain을 통해 OpenAI API 호출
     try:
-        response = openai.ChatCompletion.create(
-            model="gpt-3.5-turbo",  # 사용할 OpenAI 모델
-            messages=[
-                {"role": "system", "content": f"당신은 {user_mbti} 성격을 가진 AI입니다."},  # 시스템 메시지 (AI 역할 설정)
-                {"role": "user", "content": f"사용자가 입력한 메시지: '{user_message}'\n관련 데이터: '{retrieved_data}'"}  # 사용자 메시지와 검색된 데이터 전달
-            ],
-            max_tokens=300,  # 생성할 응답의 최대 토큰 수
-            temperature=0.7  # 응답의 다양성 조정
-        )
-        reply = response['choices'][0]['message']['content'].strip()  # AI 응답 내용 추출
+        reply = chat_chain.run({
+            "mbti": user_mbti,
+            "user_input": user_message,
+            "retrieved_data": retrieved_data or "관련 데이터 없음"
+        })
     except Exception as e:
-        reply = f"AI 응답 생성 중 문제가 발생했습니다: {str(e)}"  # 예외 발생 시 오류 메시지 반환
+        reply = f"AI 응답 생성 중 문제가 발생했습니다: {str(e)}"
 
     # 대화 기록 업데이트
     conversation_history.append({"user": user_message, "assistant": reply})  # 대화 내용 저장
